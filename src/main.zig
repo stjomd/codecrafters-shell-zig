@@ -15,6 +15,8 @@ pub fn main() !void {
 fn command(input: []u8) !void {
     if (std.mem.startsWith(u8, input, "exit")) {
         try exit(input[4..]);
+    } else if (std.mem.startsWith(u8, input, "echo")) {
+        try echo(input[4..]);
     } else {
         try stdout.print("{s}: command not found\n", .{input});
     }
@@ -23,4 +25,8 @@ fn command(input: []u8) !void {
 fn exit(args: []u8) !void {
     const code = try std.fmt.parseInt(u8, args[1..], 10);
     std.process.exit(code);
+}
+
+fn echo(args: []u8) !void {
+    try stdout.print("{s}\n", .{args[1..]});
 }
