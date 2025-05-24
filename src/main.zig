@@ -65,12 +65,50 @@ fn echo(args: []u8) !void {
 }
 
 /// Prints the type of the symbol.
-/// `args` should be the symbol, as a string.
-fn typeCommand(args: []u8) !void {
-    const command = findCommand(args);
+/// `name` should be the symbol, as a string.
+fn typeCommand(name: []u8) !void {
+    const command = findCommand(name);
     if (command) |cmd| {
         try stdout.print("{s} is a shell builtin\n", .{cmd.name});
-    } else {
-        try stdout.print("{s}: not found\n", .{args});
+        return;
     }
+
+    const path = try getEnv("PATH");
+    if (path) |path_val| {
+        var path_iter = std.mem.splitScalar(u8, path_val, ':');
+        while (path_iter.next()) |location| {
+            var dir = std.fs.cwd().openDir(location, .{ .iterate = true }) catch {
+                continue;
+            };
+            defer dir.close();
+
+            var dir_iter = dir.iterate();
+            while (try dir_iter.next()) |entry| {
+                if (std.mem.eql(u8, entry.name, name)) {
+                    try stdout.print("{s} is {s}/{s}\n", .{ name, location, entry.name });
+                    return;
+                }
+            }
+        }
+    }
+    try stdout.print("{s}: not found\n", .{name});
+}
+
+fn getEnv(key: []const u8) !?[]const u8 {
+    const allocator = std.heap.page_allocator;
+
+    var env = try std.process.getEnvMap(allocator);
+    defer env.deinit();
+
+    var iter = env.iterator();
+    while (iter.next()) |pair| {
+        const current_key = pair.key_ptr.*;
+        if (std.mem.eql(u8, current_key, key)) {
+            const value = pair.value_ptr.*;
+            const buf = try allocator.alloc(u8, value.len);
+            std.mem.copyForwards(u8, buf, value);
+            return buf;
+        }
+    }
+    return null;
 }
