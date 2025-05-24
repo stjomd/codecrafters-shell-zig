@@ -16,7 +16,7 @@ pub fn main() !void {
         var argv: [255][]const u8 = undefined;
         const argc = try parseArgs(input, &argv);
 
-        const builtin = builtins.findBuiltin(argv[0]);
+        const builtin = builtins.Builtin.byName(argv[0]);
         if (builtin) |cmd| {
             try cmd.run(argv[0..argc]);
             continue;

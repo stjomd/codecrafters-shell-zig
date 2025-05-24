@@ -5,28 +5,44 @@ const stdin = std.io.getStdIn().reader();
 const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
 
-/// A type that represents an executable command.
-const Command = struct {
-    name: []const u8,
-    run: *const fn ([][]const u8) anyerror!void,
+const all_builtins = [_]Builtin{
+    .exit,
+    .echo,
+    .type,
 };
 
-/// Shell builtin commands.
-const builtins = [_]Command{
-    Command{ .name = "exit", .run = exit },
-    Command{ .name = "echo", .run = echo },
-    Command{ .name = "type", .run = typeCommand },
-};
+pub const Builtin = enum {
+    exit,
+    echo,
+    type,
 
-/// Retrieves a command by its name.
-pub fn findBuiltin(name: []const u8) ?Command {
-    for (builtins) |command| {
-        if (std.mem.eql(u8, name, command.name)) {
-            return command;
-        }
+    /// Returns the name of this builtin.
+    pub fn name(self: Builtin) []const u8 {
+        return switch (self) {
+            .exit => "exit",
+            .echo => "echo",
+            .type => "type",
+        };
     }
-    return null;
-}
+    /// Executes the builtin with the specified arguments.
+    /// It is assumed that args includes the builtin name at index 0.
+    pub fn run(self: Builtin, args: [][]const u8) !void {
+        try switch (self) {
+            .exit => exit(args),
+            .echo => echo(args),
+            .type => typeCommand(args),
+        };
+    }
+    /// Returns an instance of this enum with the same name as specified.
+    pub fn byName(_name: []const u8) ?Builtin {
+        for (all_builtins) |builtin| {
+            if (std.mem.eql(u8, _name, builtin.name())) {
+                return builtin;
+            }
+        }
+        return null;
+    }
+};
 
 /// Exits the process with a specified exit code.
 /// `args` should be the numeric exit code.
@@ -51,9 +67,9 @@ fn echo(args: [][]const u8) !void {
 /// Prints the type of the symbol.
 /// `name` should be the symbol, as a string.
 fn typeCommand(args: [][]const u8) !void {
-    const command = findBuiltin(args[1]);
+    const command = Builtin.byName(args[1]);
     if (command) |cmd| {
-        try stdout.print("{s} is a shell builtin\n", .{cmd.name});
+        try stdout.print("{s} is a shell builtin\n", .{cmd.name()});
         return;
     }
 
