@@ -18,7 +18,7 @@ pub fn main() !void {
 
         const builtin = builtins.Builtin.byName(argv[0]);
         if (builtin) |cmd| {
-            try cmd.run(argv[0..argc]);
+            try cmd.run(argv[0..argc], stdout);
             continue;
         }
 
