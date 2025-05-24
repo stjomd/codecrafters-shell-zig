@@ -1,12 +1,13 @@
 const std = @import("std");
 
-const stdout = std.io.getStdOut().writer();
 const stdin = std.io.getStdIn().reader();
+const stdout = std.io.getStdOut().writer();
+const stderr = std.io.getStdErr().writer();
 
 /// A type that represents an executable command.
 const Command = struct {
     name: []const u8,
-    run: *const fn ([]u8) anyerror!void,
+    run: *const fn ([][]const u8) anyerror!void,
 };
 
 pub fn main() !void {
@@ -15,14 +16,52 @@ pub fn main() !void {
         try stdout.print("$ ", .{});
         const input = try stdin.readUntilDelimiter(&buffer, '\n');
 
-        const name = parseName(input);
-        const command = findCommand(name);
-        if (command) |cmd| {
-            try cmd.run(input[(name.len + 1)..]);
-        } else {
-            try stdout.print("{s}: command not found\n", .{name});
+        var argv: [255][]const u8 = undefined;
+        const argc = try parseArgs(input, &argv);
+
+        const builtin = findBuiltin(argv[0]);
+        if (builtin) |cmd| {
+            try cmd.run(argv[0..argc]);
+            continue;
         }
+
+        const exe_path = try findExecutable(argv[0], std.heap.page_allocator);
+        if (exe_path) |path| {
+            defer std.heap.page_allocator.free(path);
+            try runExternal(argv[0..argc], std.heap.page_allocator);
+            continue;
+        }
+
+        try stdout.print("{s}: command not found\n", .{argv[0]});
     }
+}
+
+/// Parses an input string and fills the `dest` slice with the parsed arguments.
+fn parseArgs(input: []const u8, dest: [][]const u8) !u8 {
+    var iter = std.mem.splitScalar(u8, input, ' ');
+    var counter: u8 = 0;
+    while (iter.next()) |arg| {
+        dest[counter] = arg;
+        counter += 1;
+    }
+    return counter;
+}
+
+/// Runs an executable.
+fn runExternal(argv: [][]const u8, allocator: std.mem.Allocator) !void {
+    var child = std.process.Child.init(argv, allocator);
+    child.stdout_behavior = .Pipe;
+    child.stderr_behavior = .Pipe;
+
+    var stdout_buf = try std.ArrayListAlignedUnmanaged(u8, null).initCapacity(allocator, 1024);
+    var stderr_buf = try std.ArrayListAlignedUnmanaged(u8, null).initCapacity(allocator, 1024);
+
+    try child.spawn();
+    try child.collectOutput(allocator, &stdout_buf, &stderr_buf, 2048);
+    _ = try child.wait();
+
+    _ = try stderr.write(stderr_buf.items);
+    _ = try stdout.write(stdout_buf.items);
 }
 
 /// Retrieves the name of the command from the user input, i.e. the substring until the first whitespace.
@@ -33,7 +72,7 @@ fn parseName(input: []u8) []const u8 {
 }
 
 /// Retrieves a command by its name.
-fn findCommand(name: []const u8) ?Command {
+fn findBuiltin(name: []const u8) ?Command {
     for (builtins) |command| {
         if (std.mem.eql(u8, name, command.name)) {
             return command;
@@ -53,26 +92,44 @@ const builtins = [_]Command{
 
 /// Exits the process with a specified exit code.
 /// `args` should be the numeric exit code.
-fn exit(args: []u8) !void {
-    const code = try std.fmt.parseInt(u8, args[0..], 10);
+fn exit(args: [][]const u8) !void {
+    const code = try std.fmt.parseInt(u8, args[1], 10);
     std.process.exit(code);
 }
 
 /// Prints the argument to stdout.
 /// `args` should be the message to be printed.
-fn echo(args: []u8) !void {
-    try stdout.print("{s}\n", .{args[0..]});
+fn echo(args: [][]const u8) !void {
+    for (args[1..], 1..) |arg, i| {
+        try stdout.print("{s}", .{arg});
+        if (i != args[1..].len) {
+            try stdout.print(" ", .{});
+        }
+    }
+    try stdout.print("\n", .{});
 }
 
 /// Prints the type of the symbol.
 /// `name` should be the symbol, as a string.
-fn typeCommand(name: []u8) !void {
-    const command = findCommand(name);
+fn typeCommand(args: [][]const u8) !void {
+    const command = findBuiltin(args[1]);
     if (command) |cmd| {
         try stdout.print("{s} is a shell builtin\n", .{cmd.name});
         return;
     }
 
+    const externalCommand = try findExecutable(args[1], std.heap.page_allocator);
+    if (externalCommand) |path| {
+        defer std.heap.page_allocator.free(path);
+        try stdout.print("{s} is {s}\n", .{ args[1], path });
+        return;
+    }
+    try stdout.print("{s}: not found\n", .{args[1]});
+}
+
+/// Returns the path to the executable with the specified name.
+/// The path is search for via the `PATH` environment variable.
+fn findExecutable(name: []const u8, allocator: std.mem.Allocator) !?[]u8 {
     const path = try getEnv("PATH");
     if (path) |path_val| {
         var path_iter = std.mem.splitScalar(u8, path_val, ':');
@@ -85,15 +142,19 @@ fn typeCommand(name: []u8) !void {
             var dir_iter = dir.iterate();
             while (try dir_iter.next()) |entry| {
                 if (std.mem.eql(u8, entry.name, name)) {
-                    try stdout.print("{s} is {s}/{s}\n", .{ name, location, entry.name });
-                    return;
+                    const qualp = try allocator.alloc(u8, location.len + 1 + entry.name.len);
+                    std.mem.copyForwards(u8, qualp, location);
+                    qualp[location.len] = '/';
+                    std.mem.copyForwards(u8, qualp[(location.len + 1)..], entry.name);
+                    return qualp;
                 }
             }
         }
     }
-    try stdout.print("{s}: not found\n", .{name});
+    return null;
 }
 
+/// Returns the value of the environment variable with the specified key.
 fn getEnv(key: []const u8) !?[]const u8 {
     const allocator = std.heap.page_allocator;
 
