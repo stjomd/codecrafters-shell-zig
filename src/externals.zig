@@ -27,21 +27,30 @@ pub fn findExecutable(name: []const u8, allocator: std.mem.Allocator) !?[]u8 {
     if (path) |path_val| {
         var path_iter = std.mem.splitScalar(u8, path_val, ':');
         while (path_iter.next()) |location| {
-            var dir = std.fs.cwd().openDir(location, .{ .iterate = true }) catch {
+            return try findInDir(location, name, allocator) orelse {
                 continue;
             };
-            defer dir.close();
+        }
+    }
+    return null;
+}
 
-            var dir_iter = dir.iterate();
-            while (try dir_iter.next()) |entry| {
-                if (std.mem.eql(u8, entry.name, name)) {
-                    const qualp = try allocator.alloc(u8, location.len + 1 + entry.name.len);
-                    std.mem.copyForwards(u8, qualp, location);
-                    qualp[location.len] = '/';
-                    std.mem.copyForwards(u8, qualp[(location.len + 1)..], entry.name);
-                    return qualp;
-                }
-            }
+/// Looks for the executable with the specified name in the specified directory.
+/// Returns the path to the executable if found, and `null` otherwise.
+fn findInDir(location: []const u8, name: []const u8, allocator: std.mem.Allocator) !?[]u8 {
+    var dir = std.fs.cwd().openDir(location, .{ .iterate = true }) catch {
+        return null;
+    };
+    defer dir.close();
+
+    var dir_iter = dir.iterate();
+    while (try dir_iter.next()) |entry| {
+        if (std.mem.eql(u8, entry.name, name)) {
+            const qual_path = try allocator.alloc(u8, location.len + 1 + entry.name.len);
+            std.mem.copyForwards(u8, qual_path, location);
+            qual_path[location.len] = '/';
+            std.mem.copyForwards(u8, qual_path[(location.len + 1)..], entry.name);
+            return qual_path;
         }
     }
     return null;
