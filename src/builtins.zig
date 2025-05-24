@@ -9,12 +9,14 @@ const all_builtins = [_]Builtin{
     .exit,
     .echo,
     .type,
+    .pwd,
 };
 
 pub const Builtin = enum {
     exit,
     echo,
     type,
+    pwd,
 
     /// Returns the name of this builtin.
     pub fn name(self: Builtin) []const u8 {
@@ -22,6 +24,7 @@ pub const Builtin = enum {
             .exit => "exit",
             .echo => "echo",
             .type => "type",
+            .pwd => "pwd",
         };
     }
     /// Executes the builtin with the specified arguments.
@@ -31,6 +34,7 @@ pub const Builtin = enum {
             .exit => exit(args),
             .echo => echo(args, stdout),
             .type => typeCommand(args, stdout, stderr),
+            .pwd => pwd(stdout, stderr),
         };
     }
     /// Returns an instance of this enum with the same name as specified.
@@ -81,4 +85,14 @@ fn typeCommand(args: [][]const u8, stdout: anytype, stderr: anytype) !void {
     }
 
     try stderr.print("{s}: not found\n", .{args[1]});
+}
+
+/// Prints current working directory
+fn pwd(stdout: anytype, stderr: anytype) !void {
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    const cwd = std.posix.getcwd(&buf) catch |err| {
+        try stderr.print("pwd: {}\n", .{err});
+        return;
+    };
+    try stdout.print("{s}\n", .{cwd});
 }
