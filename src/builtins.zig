@@ -3,7 +3,7 @@ const externals = @import("externals.zig");
 
 const stdin = std.io.getStdIn().reader();
 // const stdout = std.io.getStdOut().writer();
-const stderr = std.io.getStdErr().writer();
+// const stderr = std.io.getStdErr().writer();
 
 const all_builtins = [_]Builtin{
     .exit,
@@ -26,11 +26,11 @@ pub const Builtin = enum {
     }
     /// Executes the builtin with the specified arguments.
     /// It is assumed that args includes the builtin name at index 0.
-    pub fn run(self: Builtin, args: [][]const u8, stdout: anytype) !void {
+    pub fn run(self: Builtin, args: [][]const u8, stdout: anytype, stderr: anytype) !void {
         try switch (self) {
             .exit => exit(args),
             .echo => echo(args, stdout),
-            .type => typeCommand(args, stdout),
+            .type => typeCommand(args, stdout, stderr),
         };
     }
     /// Returns an instance of this enum with the same name as specified.
@@ -66,7 +66,7 @@ fn echo(args: [][]const u8, stdout: anytype) !void {
 
 /// Prints the type of the symbol.
 /// `name` should be the symbol, as a string.
-fn typeCommand(args: [][]const u8, stdout: anytype) !void {
+fn typeCommand(args: [][]const u8, stdout: anytype, stderr: anytype) !void {
     const command = Builtin.byName(args[1]);
     if (command) |cmd| {
         try stdout.print("{s} is a shell builtin\n", .{cmd.name()});
@@ -80,5 +80,5 @@ fn typeCommand(args: [][]const u8, stdout: anytype) !void {
         return;
     }
 
-    try stdout.print("{s}: not found\n", .{args[1]});
+    try stderr.print("{s}: not found\n", .{args[1]});
 }
