@@ -25,7 +25,7 @@ pub fn main() !void {
         const exe_path = try externals.findExecutable(argv[0], std.heap.page_allocator);
         if (exe_path) |path| {
             defer std.heap.page_allocator.free(path);
-            try externals.runExternal(argv[0..argc], std.heap.page_allocator);
+            try externals.runExternal(argv[0..argc], std.heap.page_allocator, stdout, stderr);
             continue;
         }
 

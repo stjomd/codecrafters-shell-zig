@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const stdout = std.io.getStdOut().writer();
-const stderr = std.io.getStdErr().writer();
+// const stdout = std.io.getStdOut().writer();
+// const stderr = std.io.getStdErr().writer();
 
 /// Runs an executable.
-pub fn runExternal(argv: [][]const u8, allocator: std.mem.Allocator) !void {
+pub fn runExternal(argv: [][]const u8, allocator: std.mem.Allocator, stdout: anytype, stderr: anytype) !void {
     var child = std.process.Child.init(argv, allocator);
     child.stdout_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
