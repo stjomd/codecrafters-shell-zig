@@ -2,14 +2,13 @@ const std = @import("std");
 const externals = @import("externals.zig");
 
 const stdin = std.io.getStdIn().reader();
-// const stdout = std.io.getStdOut().writer();
-// const stderr = std.io.getStdErr().writer();
 
 const all_builtins = [_]Builtin{
     .exit,
     .echo,
     .type,
     .pwd,
+    .cd,
 };
 
 pub const Builtin = enum {
@@ -17,6 +16,7 @@ pub const Builtin = enum {
     echo,
     type,
     pwd,
+    cd,
 
     /// Returns the name of this builtin.
     pub fn name(self: Builtin) []const u8 {
@@ -25,6 +25,7 @@ pub const Builtin = enum {
             .echo => "echo",
             .type => "type",
             .pwd => "pwd",
+            .cd => "cd",
         };
     }
     /// Executes the builtin with the specified arguments.
@@ -35,6 +36,7 @@ pub const Builtin = enum {
             .echo => echo(args, stdout),
             .type => typeCommand(args, stdout, stderr),
             .pwd => pwd(stdout, stderr),
+            .cd => cd(args, stderr),
         };
     }
     /// Returns an instance of this enum with the same name as specified.
@@ -95,4 +97,12 @@ fn pwd(stdout: anytype, stderr: anytype) !void {
         return;
     };
     try stdout.print("{s}\n", .{cwd});
+}
+
+/// Changes current working directory
+fn cd(args: [][]const u8, stderr: anytype) !void {
+    std.posix.chdir(args[1]) catch |err| switch (err) {
+        std.posix.ChangeCurDirError.FileNotFound => try stderr.print("cd: {s}: No such file or directory\n", .{args[1]}),
+        else => try stderr.print("cd: {s}: {}\n", .{ args[1], err }),
+    };
 }
