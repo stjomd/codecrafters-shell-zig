@@ -1,8 +1,5 @@
 const std = @import("std");
 
-// const stdout = std.io.getStdOut().writer();
-// const stderr = std.io.getStdErr().writer();
-
 /// Runs an executable.
 pub fn runExternal(argv: [][]const u8, allocator: std.mem.Allocator, stdout: anytype, stderr: anytype) !void {
     var child = std.process.Child.init(argv, allocator);
@@ -57,7 +54,7 @@ fn findInDir(location: []const u8, name: []const u8, allocator: std.mem.Allocato
 }
 
 /// Returns the value of the environment variable with the specified key.
-fn getEnv(key: []const u8) !?[]const u8 {
+pub fn getEnv(key: []const u8) !?[]const u8 {
     const allocator = std.heap.page_allocator;
 
     var env = try std.process.getEnvMap(allocator);

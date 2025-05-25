@@ -1,8 +1,6 @@
 const std = @import("std");
 const externals = @import("externals.zig");
 
-const stdin = std.io.getStdIn().reader();
-
 const all_builtins = [_]Builtin{
     .exit,
     .echo,
@@ -101,8 +99,20 @@ fn pwd(stdout: anytype, stderr: anytype) !void {
 
 /// Changes current working directory
 fn cd(args: [][]const u8, stderr: anytype) !void {
-    std.posix.chdir(args[1]) catch |err| switch (err) {
-        std.posix.ChangeCurDirError.FileNotFound => try stderr.print("cd: {s}: No such file or directory\n", .{args[1]}),
-        else => try stderr.print("cd: {s}: {}\n", .{ args[1], err }),
+    var path = args[1];
+
+    if (std.mem.eql(u8, path, "~")) {
+        const home = externals.getEnv("HOME") catch {
+            try stderr.print("cd: $HOME is not set", .{});
+            return;
+        };
+        if (home) |home_path| {
+            path = home_path;
+        }
+    }
+
+    std.posix.chdir(path) catch |err| switch (err) {
+        std.posix.ChangeCurDirError.FileNotFound => try stderr.print("cd: {s}: No such file or directory\n", .{path}),
+        else => try stderr.print("cd: {s}: {}\n", .{ path, err }),
     };
 }
